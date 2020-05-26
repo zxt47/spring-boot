@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -139,6 +139,8 @@ public class LogbackLoggingSystem extends Slf4JLoggingSystem {
 				environment.resolvePlaceholders("${logging.pattern.level:${LOG_LEVEL_PATTERN:%5p}}"));
 		context.putProperty(LoggingSystemProperties.LOG_DATEFORMAT_PATTERN, environment.resolvePlaceholders(
 				"${logging.pattern.dateformat:${LOG_DATEFORMAT_PATTERN:yyyy-MM-dd HH:mm:ss.SSS}}"));
+		context.putProperty(LoggingSystemProperties.ROLLING_FILE_NAME_PATTERN, environment
+				.resolvePlaceholders("${logging.pattern.rolling-file-name:${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz}"));
 		new DefaultLogbackConfiguration(initializationContext, logFile).apply(configurator);
 		context.setPackagingDataEnabled(true);
 	}
@@ -232,7 +234,16 @@ public class LogbackLoggingSystem extends Slf4JLoggingSystem {
 
 	@Override
 	public LoggerConfiguration getLoggerConfiguration(String loggerName) {
-		return getLoggerConfiguration(getLogger(loggerName));
+		String name = getLoggerName(loggerName);
+		LoggerContext loggerContext = getLoggerContext();
+		return getLoggerConfiguration(loggerContext.exists(name));
+	}
+
+	private String getLoggerName(String name) {
+		if (!StringUtils.hasLength(name) || Logger.ROOT_LOGGER_NAME.equals(name)) {
+			return ROOT_LOGGER_NAME;
+		}
+		return name;
 	}
 
 	private LoggerConfiguration getLoggerConfiguration(ch.qos.logback.classic.Logger logger) {
@@ -241,10 +252,7 @@ public class LogbackLoggingSystem extends Slf4JLoggingSystem {
 		}
 		LogLevel level = LEVELS.convertNativeToSystem(logger.getLevel());
 		LogLevel effectiveLevel = LEVELS.convertNativeToSystem(logger.getEffectiveLevel());
-		String name = logger.getName();
-		if (!StringUtils.hasLength(name) || Logger.ROOT_LOGGER_NAME.equals(name)) {
-			name = ROOT_LOGGER_NAME;
-		}
+		String name = getLoggerName(logger.getName());
 		return new LoggerConfiguration(name, level, effectiveLevel);
 	}
 
@@ -268,11 +276,7 @@ public class LogbackLoggingSystem extends Slf4JLoggingSystem {
 
 	private ch.qos.logback.classic.Logger getLogger(String name) {
 		LoggerContext factory = getLoggerContext();
-		if (StringUtils.isEmpty(name) || ROOT_LOGGER_NAME.equals(name)) {
-			name = Logger.ROOT_LOGGER_NAME;
-		}
-		return factory.getLogger(name);
-
+		return factory.getLogger(getLoggerName(name));
 	}
 
 	private LoggerContext getLoggerContext() {

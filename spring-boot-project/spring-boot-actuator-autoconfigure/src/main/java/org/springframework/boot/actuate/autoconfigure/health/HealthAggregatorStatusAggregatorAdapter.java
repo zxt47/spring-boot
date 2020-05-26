@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ class HealthAggregatorStatusAggregatorAdapter implements StatusAggregator {
 	@Override
 	public Status getAggregateStatus(Set<Status> statuses) {
 		int index = 0;
-		Map<String, Health> healths = new LinkedHashMap<String, Health>();
+		Map<String, Health> healths = new LinkedHashMap<>();
 		for (Status status : statuses) {
 			index++;
 			healths.put("health" + index, asHealth(status));

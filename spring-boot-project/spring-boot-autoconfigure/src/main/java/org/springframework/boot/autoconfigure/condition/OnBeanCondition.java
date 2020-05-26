@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -387,7 +387,7 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 
 		private final ClassLoader classLoader;
 
-		private final Class<?> annotationType;
+		private final Class<? extends Annotation> annotationType;
 
 		private final Set<String> names;
 
@@ -581,11 +581,11 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 		}
 
 		ConditionMessage.Builder message() {
-			return ConditionMessage.forCondition(ConditionalOnBean.class, this);
+			return ConditionMessage.forCondition(this.annotationType, this);
 		}
 
 		ConditionMessage.Builder message(ConditionMessage message) {
-			return message.andCondition(ConditionalOnBean.class, this);
+			return message.andCondition(this.annotationType, this);
 		}
 
 		@Override
@@ -598,17 +598,19 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 			if (hasNames) {
 				string.append("names: ");
 				string.append(StringUtils.collectionToCommaDelimitedString(this.names));
-				string.append(hasTypes ? "" : "; ");
+				string.append(hasTypes ? " " : "; ");
 			}
 			if (hasTypes) {
 				string.append("types: ");
 				string.append(StringUtils.collectionToCommaDelimitedString(this.types));
+				string.append(hasIgnoredTypes ? " " : "; ");
 			}
 			if (hasIgnoredTypes) {
 				string.append("ignored: ");
 				string.append(StringUtils.collectionToCommaDelimitedString(this.ignoredTypes));
+				string.append("; ");
 			}
-			string.append("; SearchStrategy: ");
+			string.append("SearchStrategy: ");
 			string.append(this.strategy.toString().toLowerCase(Locale.ENGLISH));
 			string.append(")");
 			return string.toString();
@@ -731,7 +733,7 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 	}
 
 	/**
-	 * Exteption thrown when the bean type cannot be deduced.
+	 * Exception thrown when the bean type cannot be deduced.
 	 */
 	static final class BeanTypeDeductionException extends RuntimeException {
 

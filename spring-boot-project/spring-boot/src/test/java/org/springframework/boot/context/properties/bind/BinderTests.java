@@ -211,7 +211,7 @@ class BinderTests {
 	}
 
 	@Test
-	void bindWhenHasCustomDefultHandlerShouldTriggerOnSuccess() {
+	void bindWhenHasCustomDefaultHandlerShouldTriggerOnSuccess() {
 		this.sources.add(new MockConfigurationPropertySource("foo.value", "bar", "line1"));
 		BindHandler handler = mock(BindHandler.class, Answers.CALLS_REAL_METHODS);
 		Binder binder = new Binder(this.sources, null, null, null, handler);
@@ -239,22 +239,6 @@ class BinderTests {
 				Collections.singletonMap("iso", DateTimeFormat.ISO.DATE_TIME), DateTimeFormat.class, null);
 		LocalDate result = this.binder.bind("foo", Bindable.of(LocalDate.class).withAnnotations(annotation)).get();
 		assertThat(result.toString()).isEqualTo("2014-04-01");
-	}
-
-	@Test
-	void bindExceptionWhenBeanBindingFailsShouldHaveNullConfigurationProperty() {
-		MockConfigurationPropertySource source = new MockConfigurationPropertySource();
-		source.put("foo.value", "hello");
-		source.put("foo.items", "bar,baz");
-		this.sources.add(source);
-		Bindable<JavaBean> target = Bindable.of(JavaBean.class);
-		assertThatExceptionOfType(BindException.class).isThrownBy(() -> this.binder.bind("foo", target))
-				.satisfies(this::noItemsSetterRequirements);
-	}
-
-	private void noItemsSetterRequirements(BindException ex) {
-		assertThat(ex.getCause().getMessage()).isEqualTo("No setter found for property: items");
-		assertThat(ex.getProperty()).isNull();
 	}
 
 	@Test
@@ -316,6 +300,20 @@ class BinderTests {
 		JavaBean value = this.binder.bindOrCreate("foo", Bindable.of(JavaBean.class));
 		assertThat(value).isNotNull();
 		assertThat(value).isInstanceOf(JavaBean.class);
+	}
+
+	@Test
+	void bindToJavaBeanWhenHandlerOnStartReturnsNullShouldReturnUnbound() { // gh-18129
+		this.sources.add(new MockConfigurationPropertySource("foo.value", "bar"));
+		BindResult<JavaBean> result = this.binder.bind("foo", Bindable.of(JavaBean.class), new BindHandler() {
+
+			@Override
+			public <T> Bindable<T> onStart(ConfigurationPropertyName name, Bindable<T> target, BindContext context) {
+				return null;
+			}
+
+		});
+		assertThat(result.isBound()).isFalse();
 	}
 
 	static class JavaBean {

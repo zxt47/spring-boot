@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import java.beans.PropertyDescriptor;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -27,7 +28,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.springframework.aop.scope.ScopedObject;
 import org.springframework.aop.scope.ScopedProxyUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.PropertyValues;
@@ -248,9 +248,9 @@ public class MockitoPostProcessor extends InstantiationAwareBeanPostProcessorAda
 	}
 
 	private Set<String> getExistingBeans(ConfigurableListableBeanFactory beanFactory, ResolvableType type) {
-		Set<String> beans = new LinkedHashSet<>(Arrays.asList(beanFactory.getBeanNamesForType(type)));
+		Set<String> beans = new LinkedHashSet<>(Arrays.asList(beanFactory.getBeanNamesForType(type, true, false)));
 		String typeName = type.resolve(Object.class).getName();
-		for (String beanName : beanFactory.getBeanNamesForType(FactoryBean.class)) {
+		for (String beanName : beanFactory.getBeanNamesForType(FactoryBean.class, true, false)) {
 			beanName = BeanFactoryUtils.transformedBeanName(beanName);
 			BeanDefinition beanDefinition = beanFactory.getBeanDefinition(beanName);
 			if (typeName.equals(beanDefinition.getAttribute(FactoryBean.OBJECT_TYPE_ATTRIBUTE))) {
@@ -308,7 +308,7 @@ public class MockitoPostProcessor extends InstantiationAwareBeanPostProcessorAda
 				if (primaryBeanName != null) {
 					throw new NoUniqueBeanDefinitionException(type.resolve(), candidateBeanNames.size(),
 							"more than one 'primary' bean found among candidates: "
-									+ Arrays.asList(candidateBeanNames));
+									+ Collections.singletonList(candidateBeanNames));
 				}
 				primaryBeanName = candidateBeanName;
 			}
@@ -358,9 +358,6 @@ public class MockitoPostProcessor extends InstantiationAwareBeanPostProcessorAda
 			Assert.state(ReflectionUtils.getField(field, target) == null,
 					() -> "The field " + field + " cannot have an existing value");
 			Object bean = this.beanFactory.getBean(beanName, field.getType());
-			if (bean instanceof ScopedObject) {
-				bean = ((ScopedObject) bean).getTargetObject();
-			}
 			ReflectionUtils.setField(field, target, bean);
 		}
 		catch (Throwable ex) {
@@ -425,9 +422,8 @@ public class MockitoPostProcessor extends InstantiationAwareBeanPostProcessorAda
 	}
 
 	/**
-	 * {@link BeanPostProcessor} to handle {@link SpyBean @SpyBean} definitions.
-	 * Registered as a separate processor so that it can be ordered above AOP post
-	 * processors.
+	 * {@link BeanPostProcessor} to handle {@link SpyBean} definitions. Registered as a
+	 * separate processor so that it can be ordered above AOP post processors.
 	 */
 	static class SpyPostProcessor extends InstantiationAwareBeanPostProcessorAdapter implements PriorityOrdered {
 
@@ -446,22 +442,15 @@ public class MockitoPostProcessor extends InstantiationAwareBeanPostProcessorAda
 
 		@Override
 		public Object getEarlyBeanReference(Object bean, String beanName) throws BeansException {
-			return this.mockitoPostProcessor.createSpyIfNecessary(bean, getOriginalBeanNameIfScopedTarget(beanName));
+			return this.mockitoPostProcessor.createSpyIfNecessary(bean, beanName);
 		}
 
 		@Override
 		public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
-			if (bean instanceof FactoryBean || bean instanceof ScopedObject) {
+			if (bean instanceof FactoryBean) {
 				return bean;
 			}
-			return this.mockitoPostProcessor.createSpyIfNecessary(bean, getOriginalBeanNameIfScopedTarget(beanName));
-		}
-
-		private String getOriginalBeanNameIfScopedTarget(String beanName) {
-			if (ScopedProxyUtils.isScopedTarget(beanName)) {
-				return beanName.substring("scopedTarget.".length());
-			}
-			return beanName;
+			return this.mockitoPostProcessor.createSpyIfNecessary(bean, beanName);
 		}
 
 		static void register(BeanDefinitionRegistry registry) {

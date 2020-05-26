@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,12 +89,13 @@ class AutoConfiguredHealthEndpointGroupsTests {
 
 	@Test
 	void createWhenNoDefinedBeansAdaptsProperties() {
-		this.contextRunner.withPropertyValues("management.endpoint.health.show-details=always",
-				"management.endpoint.health.status.order=up,down",
+		this.contextRunner.withPropertyValues("management.endpoint.health.show-components=always",
+				"management.endpoint.health.show-details=never", "management.endpoint.health.status.order=up,down",
 				"management.endpoint.health.status.http-mapping.down=200").run((context) -> {
 					HealthEndpointGroups groups = context.getBean(HealthEndpointGroups.class);
 					HealthEndpointGroup primary = groups.getPrimary();
-					assertThat(primary.includeDetails(SecurityContext.NONE)).isTrue();
+					assertThat(primary.showComponents(SecurityContext.NONE)).isTrue();
+					assertThat(primary.showDetails(SecurityContext.NONE)).isFalse();
 					assertThat(primary.getStatusAggregator().getAggregateStatus(Status.UP, Status.DOWN))
 							.isEqualTo(Status.UP);
 					assertThat(primary.getHttpCodeStatusMapper().getStatusCode(Status.DOWN)).isEqualTo(200);
@@ -102,7 +103,7 @@ class AutoConfiguredHealthEndpointGroupsTests {
 	}
 
 	@Test
-	void createWhenHasStatusAggregatorBeanReturnsInstanceWithAgregatorUsedForAllGroups() {
+	void createWhenHasStatusAggregatorBeanReturnsInstanceWithAggregatorUsedForAllGroups() {
 		this.contextRunner.withUserConfiguration(CustomStatusAggregatorConfiguration.class)
 				.withPropertyValues("management.endpoint.health.status.order=up,down",
 						"management.endpoint.health.group.a.include=*")

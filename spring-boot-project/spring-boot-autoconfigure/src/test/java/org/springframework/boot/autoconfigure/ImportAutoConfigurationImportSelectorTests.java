@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ import org.springframework.core.type.classreading.SimpleMetadataReaderFactory;
 import org.springframework.util.ClassUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests for {@link ImportAutoConfigurationImportSelector}.
@@ -83,7 +83,7 @@ class ImportAutoConfigurationImportSelectorTests {
 	void propertyExclusionsAreNotApplied() throws Exception {
 		AnnotationMetadata annotationMetadata = getAnnotationMetadata(ImportFreeMarker.class);
 		this.importSelector.selectImports(annotationMetadata);
-		verifyZeroInteractions(this.environment);
+		verifyNoInteractions(this.environment);
 	}
 
 	@Test
@@ -171,12 +171,12 @@ class ImportAutoConfigurationImportSelectorTests {
 
 	@Test
 	void determineImportsShouldNotSetPackageImport() throws Exception {
-		Class<?> packageImportClass = ClassUtils.resolveClassName(
-				"org.springframework.boot.autoconfigure.AutoConfigurationPackages.PackageImport", null);
+		Class<?> packageImportsClass = ClassUtils.resolveClassName(
+				"org.springframework.boot.autoconfigure.AutoConfigurationPackages.PackageImports", null);
 		Set<Object> selectedImports = this.importSelector
 				.determineImports(getAnnotationMetadata(ImportMetaAutoConfigurationExcludeWithUnrelatedOne.class));
 		for (Object selectedImport : selectedImports) {
-			assertThat(selectedImport).isNotInstanceOf(packageImportClass);
+			assertThat(selectedImport).isNotInstanceOf(packageImportsClass);
 		}
 	}
 

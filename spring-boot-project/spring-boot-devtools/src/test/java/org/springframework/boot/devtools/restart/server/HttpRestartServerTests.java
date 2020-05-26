@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Tests for {@link HttpRestartServer}.
@@ -62,9 +62,9 @@ class HttpRestartServerTests {
 	}
 
 	@Test
-	void sourceFolderUrlFilterMustNotBeNull() {
-		assertThatIllegalArgumentException().isThrownBy(() -> new HttpRestartServer((SourceFolderUrlFilter) null))
-				.withMessageContaining("SourceFolderUrlFilter must not be null");
+	void sourceDirectoryUrlFilterMustNotBeNull() {
+		assertThatIllegalArgumentException().isThrownBy(() -> new HttpRestartServer((SourceDirectoryUrlFilter) null))
+				.withMessageContaining("SourceDirectoryUrlFilter must not be null");
 	}
 
 	@Test
@@ -92,7 +92,7 @@ class HttpRestartServerTests {
 		MockHttpServletRequest request = new MockHttpServletRequest();
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		this.server.handle(new ServletServerHttpRequest(request), new ServletServerHttpResponse(response));
-		verifyZeroInteractions(this.delegate);
+		verifyNoInteractions(this.delegate);
 		assertThat(response.getStatus()).isEqualTo(500);
 
 	}
@@ -103,7 +103,7 @@ class HttpRestartServerTests {
 		MockHttpServletResponse response = new MockHttpServletResponse();
 		request.setContent(new byte[] { 0, 0, 0 });
 		this.server.handle(new ServletServerHttpRequest(request), new ServletServerHttpResponse(response));
-		verifyZeroInteractions(this.delegate);
+		verifyNoInteractions(this.delegate);
 		assertThat(response.getStatus()).isEqualTo(500);
 	}
 

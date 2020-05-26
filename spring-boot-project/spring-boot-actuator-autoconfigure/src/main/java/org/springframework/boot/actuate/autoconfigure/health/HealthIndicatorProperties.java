@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 package org.springframework.boot.actuate.autoconfigure.health;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,24 +35,22 @@ import org.springframework.boot.context.properties.DeprecatedConfigurationProper
 @ConfigurationProperties(prefix = "management.health.status")
 public class HealthIndicatorProperties {
 
-	private final HealthEndpointProperties healthEndpointProperties;
+	private List<String> order = new ArrayList<>();
 
-	HealthIndicatorProperties(HealthEndpointProperties healthEndpointProperties) {
-		this.healthEndpointProperties = healthEndpointProperties;
-	}
+	private final Map<String, Integer> httpMapping = new LinkedHashMap<>();
 
 	@DeprecatedConfigurationProperty(replacement = "management.endpoint.health.status.order")
 	public List<String> getOrder() {
-		return this.healthEndpointProperties.getStatus().getOrder();
+		return this.order;
 	}
 
-	public void setOrder(List<String> statusOrder) {
-		this.healthEndpointProperties.getStatus().setOrder(statusOrder);
+	public void setOrder(List<String> order) {
+		this.order = order;
 	}
 
 	@DeprecatedConfigurationProperty(replacement = "management.endpoint.health.status.http-mapping")
 	public Map<String, Integer> getHttpMapping() {
-		return this.healthEndpointProperties.getStatus().getHttpMapping();
+		return this.httpMapping;
 	}
 
 }

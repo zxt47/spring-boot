@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,6 +81,7 @@ import static org.mockito.Mockito.verify;
  * @author Stephane Nicoll
  * @author Gary Russell
  * @author HaiTao Zhang
+ * @author Franjo Zilic
  */
 class RabbitAutoConfigurationTests {
 
@@ -99,6 +100,8 @@ class RabbitAutoConfigurationTests {
 			assertThat(messagingTemplate.getRabbitTemplate()).isEqualTo(rabbitTemplate);
 			assertThat(amqpAdmin).isNotNull();
 			assertThat(connectionFactory.getHost()).isEqualTo("localhost");
+			assertThat(getTargetConnectionFactory(context).getRequestedChannelMax())
+					.isEqualTo(com.rabbitmq.client.ConnectionFactory.DEFAULT_CHANNEL_MAX);
 			assertThat(connectionFactory.isPublisherConfirms()).isFalse();
 			assertThat(connectionFactory.isPublisherReturns()).isFalse();
 			assertThat(context.containsBean("rabbitListenerContainerFactory"))
@@ -195,17 +198,6 @@ class RabbitAutoConfigurationTests {
 				.withPropertyValues("spring.rabbitmq.virtual_host:/").run((context) -> {
 					CachingConnectionFactory connectionFactory = context.getBean(CachingConnectionFactory.class);
 					assertThat(connectionFactory.getVirtualHost()).isEqualTo("/");
-				});
-	}
-
-	@Test
-	@Deprecated
-	void testConnectionFactoryPublisherConfirmTypeUsingDeprecatedProperty() {
-		this.contextRunner.withUserConfiguration(TestConfiguration.class)
-				.withPropertyValues("spring.rabbitmq.publisher-confirms=true").run((context) -> {
-					CachingConnectionFactory connectionFactory = context.getBean(CachingConnectionFactory.class);
-					assertThat(connectionFactory.isPublisherConfirms()).isTrue();
-					assertThat(connectionFactory.isSimplePublisherConfirms()).isFalse();
 				});
 	}
 
@@ -331,6 +323,30 @@ class RabbitAutoConfigurationTests {
 	}
 
 	@Test
+	void testRabbitTemplateConfigurersIsAvailable() {
+		this.contextRunner.withUserConfiguration(TestConfiguration.class)
+				.run((context) -> assertThat(context).hasSingleBean(RabbitTemplateConfigurer.class));
+	}
+
+	@Test
+	void testRabbitTemplateConfigurerUsesConfig() {
+		this.contextRunner.withUserConfiguration(MessageConvertersConfiguration.class)
+				.withPropertyValues("spring.rabbitmq.template.exchange:my-exchange",
+						"spring.rabbitmq.template.routing-key:my-routing-key",
+						"spring.rabbitmq.template.default-receive-queue:default-queue")
+				.run((context) -> {
+					RabbitTemplateConfigurer configurer = context.getBean(RabbitTemplateConfigurer.class);
+					RabbitTemplate template = mock(RabbitTemplate.class);
+					ConnectionFactory connectionFactory = mock(ConnectionFactory.class);
+					configurer.configure(template, connectionFactory);
+					verify(template).setMessageConverter(context.getBean("myMessageConverter", MessageConverter.class));
+					verify(template).setExchange("my-exchange");
+					verify(template).setRoutingKey("my-routing-key");
+					verify(template).setDefaultReceiveQueue("default-queue");
+				});
+	}
+
+	@Test
 	void testConnectionFactoryBackOff() {
 		this.contextRunner.withUserConfiguration(TestConfiguration2.class).run((context) -> {
 			RabbitTemplate rabbitTemplate = context.getBean(RabbitTemplate.class);
@@ -429,18 +445,6 @@ class RabbitAutoConfigurationTests {
 					assertThat(rabbitListenerContainerFactory).hasFieldOrPropertyWithValue("batchSize", 20);
 					assertThat(rabbitListenerContainerFactory).hasFieldOrPropertyWithValue("missingQueuesFatal", false);
 					checkCommonProps(context, rabbitListenerContainerFactory);
-				});
-	}
-
-	@Test
-	@Deprecated
-	void testRabbitListenerContainerFactoryWithDeprecatedTransactionSizeStillWorks() {
-		this.contextRunner
-				.withUserConfiguration(MessageConvertersConfiguration.class, MessageRecoverersConfiguration.class)
-				.withPropertyValues("spring.rabbitmq.listener.simple.transactionSize:20").run((context) -> {
-					SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory = context
-							.getBean("rabbitListenerContainerFactory", SimpleRabbitListenerContainerFactory.class);
-					assertThat(rabbitListenerContainerFactory).hasFieldOrPropertyWithValue("batchSize", 20);
 				});
 	}
 
@@ -597,6 +601,15 @@ class RabbitAutoConfigurationTests {
 				.withPropertyValues("spring.rabbitmq.requestedHeartbeat:20").run((context) -> {
 					com.rabbitmq.client.ConnectionFactory rabbitConnectionFactory = getTargetConnectionFactory(context);
 					assertThat(rabbitConnectionFactory.getRequestedHeartbeat()).isEqualTo(20);
+				});
+	}
+
+	@Test
+	void customizeRequestedChannelMax() {
+		this.contextRunner.withUserConfiguration(TestConfiguration.class)
+				.withPropertyValues("spring.rabbitmq.requestedChannelMax:12").run((context) -> {
+					com.rabbitmq.client.ConnectionFactory rabbitConnectionFactory = getTargetConnectionFactory(context);
+					assertThat(rabbitConnectionFactory.getRequestedChannelMax()).isEqualTo(12);
 				});
 	}
 

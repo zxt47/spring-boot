@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2019 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import org.flywaydb.core.api.migration.JavaMigration;
 import org.flywaydb.core.internal.license.FlywayProUpgradeRequiredException;
 import org.hibernate.engine.transaction.jta.platform.internal.NoJtaPlatform;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 
 import org.springframework.beans.factory.BeanCreationException;
@@ -42,6 +43,8 @@ import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.boot.jdbc.SchemaManagement;
 import org.springframework.boot.orm.jpa.EntityManagerFactoryBuilder;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -49,6 +52,10 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.jdbc.core.JdbcOperations;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.stereotype.Component;
@@ -70,7 +77,9 @@ import static org.mockito.Mockito.mock;
  * @author Stephane Nicoll
  * @author Dominic Gunn
  * @author András Deák
+ * @author Takaaki Shimbo
  */
+@ExtendWith(OutputCaptureExtension.class)
 class FlywayAutoConfigurationTests {
 
 	private ApplicationContextRunner contextRunner = new ApplicationContextRunner()
@@ -148,6 +157,15 @@ class FlywayAutoConfigurationTests {
 	@Test
 	void flywayDataSourceWithoutDataSourceAutoConfiguration() {
 		this.contextRunner.withUserConfiguration(FlywayDataSourceConfiguration.class).run((context) -> {
+			assertThat(context).hasSingleBean(Flyway.class);
+			assertThat(context.getBean(Flyway.class).getConfiguration().getDataSource())
+					.isEqualTo(context.getBean("flywayDataSource"));
+		});
+	}
+
+	@Test
+	void flywayMultipleDataSources() {
+		this.contextRunner.withUserConfiguration(FlywayMultipleDataSourcesConfiguration.class).run((context) -> {
 			assertThat(context).hasSingleBean(Flyway.class);
 			assertThat(context.getBean(Flyway.class).getConfiguration().getDataSource())
 					.isEqualTo(context.getBean("flywayDataSource"));
@@ -271,7 +289,7 @@ class FlywayAutoConfigurationTests {
 				.withUserConfiguration(EmbeddedDataSourceConfiguration.class, FlywayJavaMigrationsConfiguration.class)
 				.run((context) -> {
 					Flyway flyway = context.getBean(Flyway.class);
-					assertThat(flyway.getConfiguration().getJavaMigrations().length).isEqualTo(2);
+					assertThat(flyway.getConfiguration().getJavaMigrations()).hasSize(2);
 				});
 	}
 
@@ -290,6 +308,29 @@ class FlywayAutoConfigurationTests {
 	void customFlywayWithJpa() {
 		this.contextRunner
 				.withUserConfiguration(EmbeddedDataSourceConfiguration.class, CustomFlywayWithJpaConfiguration.class)
+				.run((context) -> assertThat(context).hasNotFailed());
+	}
+
+	@Test
+	void customFlywayWithJdbc() {
+		this.contextRunner
+				.withUserConfiguration(EmbeddedDataSourceConfiguration.class, CustomFlywayWithJdbcConfiguration.class)
+				.run((context) -> assertThat(context).hasNotFailed());
+	}
+
+	@Test
+	void customFlywayMigrationInitializerWithJpa() {
+		this.contextRunner
+				.withUserConfiguration(EmbeddedDataSourceConfiguration.class,
+						CustomFlywayMigrationInitializerWithJpaConfiguration.class)
+				.run((context) -> assertThat(context).hasNotFailed());
+	}
+
+	@Test
+	void customFlywayMigrationInitializerWithJdbc() {
+		this.contextRunner
+				.withUserConfiguration(EmbeddedDataSourceConfiguration.class,
+						CustomFlywayMigrationInitializerWithJdbcConfiguration.class)
 				.run((context) -> assertThat(context).hasNotFailed());
 	}
 
@@ -400,14 +441,10 @@ class FlywayAutoConfigurationTests {
 	}
 
 	@Test
-	void licenseKeyIsCorrectlyMapped() {
+	void licenseKeyIsCorrectlyMapped(CapturedOutput output) {
 		this.contextRunner.withUserConfiguration(EmbeddedDataSourceConfiguration.class)
-				.withPropertyValues("spring.flyway.license-key=<<secret>>").run((context) -> {
-					assertThat(context).hasFailed();
-					Throwable failure = context.getStartupFailure();
-					assertThat(failure).hasRootCauseInstanceOf(FlywayProUpgradeRequiredException.class);
-					assertThat(failure).hasMessageContaining(" licenseKey ");
-				});
+				.withPropertyValues("spring.flyway.license-key=<<secret>>").run((context) -> assertThat(output)
+						.contains("<<secret>> is not supported by Flyway Community Edition"));
 	}
 
 	@Test
@@ -483,6 +520,27 @@ class FlywayAutoConfigurationTests {
 	}
 
 	@Configuration(proxyBeanMethods = false)
+	static class FlywayMultipleDataSourcesConfiguration {
+
+		@Bean
+		DataSource firstDataSource() {
+			return DataSourceBuilder.create().url("jdbc:hsqldb:mem:first").username("sa").build();
+		}
+
+		@Bean
+		DataSource secondDataSource() {
+			return DataSourceBuilder.create().url("jdbc:hsqldb:mem:second").username("sa").build();
+		}
+
+		@FlywayDataSource
+		@Bean
+		DataSource flywayDataSource() {
+			return DataSourceBuilder.create().url("jdbc:hsqldb:mem:flywaytest").username("sa").build();
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
 	static class FlywayJavaMigrationsConfiguration {
 
 		@Bean
@@ -521,6 +579,25 @@ class FlywayAutoConfigurationTests {
 	}
 
 	@Configuration(proxyBeanMethods = false)
+	static class CustomFlywayMigrationInitializerWithJpaConfiguration {
+
+		@Bean
+		FlywayMigrationInitializer customFlywayMigrationInitializer(Flyway flyway) {
+			return new FlywayMigrationInitializer(flyway);
+		}
+
+		@Bean
+		LocalContainerEntityManagerFactoryBean entityManagerFactoryBean(DataSource dataSource) {
+			Map<String, Object> properties = new HashMap<>();
+			properties.put("configured", "manually");
+			properties.put("hibernate.transaction.jta.platform", NoJtaPlatform.INSTANCE);
+			return new EntityManagerFactoryBuilder(new HibernateJpaVendorAdapter(), properties, null)
+					.dataSource(dataSource).build();
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
 	static class CustomFlywayWithJpaConfiguration {
 
 		private final DataSource dataSource;
@@ -530,7 +607,7 @@ class FlywayAutoConfigurationTests {
 		}
 
 		@Bean
-		Flyway flyway() {
+		Flyway customFlyway() {
 			return Flyway.configure().load();
 		}
 
@@ -541,6 +618,58 @@ class FlywayAutoConfigurationTests {
 			properties.put("hibernate.transaction.jta.platform", NoJtaPlatform.INSTANCE);
 			return new EntityManagerFactoryBuilder(new HibernateJpaVendorAdapter(), properties, null)
 					.dataSource(this.dataSource).build();
+		}
+
+	}
+
+	@Configuration
+	static class CustomFlywayWithJdbcConfiguration {
+
+		private final DataSource dataSource;
+
+		protected CustomFlywayWithJdbcConfiguration(DataSource dataSource) {
+			this.dataSource = dataSource;
+		}
+
+		@Bean
+		Flyway customFlyway() {
+			return Flyway.configure().load();
+		}
+
+		@Bean
+		JdbcOperations jdbcOperations() {
+			return new JdbcTemplate(this.dataSource);
+		}
+
+		@Bean
+		NamedParameterJdbcOperations namedParameterJdbcOperations() {
+			return new NamedParameterJdbcTemplate(this.dataSource);
+		}
+
+	}
+
+	@Configuration
+	protected static class CustomFlywayMigrationInitializerWithJdbcConfiguration {
+
+		private final DataSource dataSource;
+
+		protected CustomFlywayMigrationInitializerWithJdbcConfiguration(DataSource dataSource) {
+			this.dataSource = dataSource;
+		}
+
+		@Bean
+		public FlywayMigrationInitializer customFlywayMigrationInitializer(Flyway flyway) {
+			return new FlywayMigrationInitializer(flyway);
+		}
+
+		@Bean
+		public JdbcOperations jdbcOperations() {
+			return new JdbcTemplate(this.dataSource);
+		}
+
+		@Bean
+		public NamedParameterJdbcOperations namedParameterJdbcOperations() {
+			return new NamedParameterJdbcTemplate(this.dataSource);
 		}
 
 	}
